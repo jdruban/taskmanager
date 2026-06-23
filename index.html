@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Task Manager</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -88,6 +90,19 @@
     gap: 8px;
   }
 
+  .sync-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+    transition: background 0.3s;
+  }
+  .sync-dot.connecting { background: var(--text-hint); }
+  .sync-dot.saving     { background: var(--warning); }
+  .sync-dot.ok         { background: var(--success); }
+  .sync-dot.error      { background: var(--danger); }
+
   nav {
     display: flex;
     gap: 4px;
@@ -103,6 +118,7 @@
     font-size: 14px;
     cursor: pointer;
     transition: all 0.15s;
+    font-family: inherit;
   }
 
   nav button.active {
@@ -125,7 +141,6 @@
   .view { display: none; }
   .view.active { display: block; }
 
-  /* Add Task Form */
   .form-card {
     background: var(--surface);
     border: 0.5px solid var(--border);
@@ -195,6 +210,7 @@
     font-weight: 500;
     cursor: pointer;
     transition: opacity 0.15s, transform 0.1s;
+    font-family: inherit;
   }
 
   .btn-primary:hover { opacity: 0.88; }
@@ -209,11 +225,11 @@
     font-size: 13px;
     cursor: pointer;
     transition: background 0.15s;
+    font-family: inherit;
   }
 
   .btn-ghost:hover { background: var(--surface2); color: var(--text); }
 
-  /* Dashboard */
   .stats-row {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -268,6 +284,7 @@
     color: var(--text);
     font-size: 13px;
     cursor: pointer;
+    font-family: inherit;
   }
 
   .range-picker-row {
@@ -304,7 +321,6 @@
     margin: 1.5rem 0 0.5rem;
   }
 
-  /* Task list */
   .task-list { display: flex; flex-direction: column; gap: 6px; }
 
   .task-item {
@@ -320,9 +336,7 @@
 
   .task-item:hover { border-color: var(--border-strong); }
 
-  .task-item.done {
-    opacity: 0.55;
-  }
+  .task-item.done { opacity: 0.55; }
 
   .task-item.done .task-title {
     text-decoration: line-through;
@@ -340,7 +354,6 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-top: 0;
     transition: all 0.15s;
     flex-shrink: 0;
   }
@@ -351,10 +364,7 @@
   .check-btn:hover { border-color: var(--success); background: var(--success-bg); }
   .check-btn:hover .icon-empty { opacity: 1; color: var(--success); }
 
-  .task-item.done .check-btn {
-    background: var(--success);
-    border-color: var(--success);
-  }
+  .task-item.done .check-btn { background: var(--success); border-color: var(--success); }
   .task-item.done .check-btn .icon-empty { display: none; }
   .task-item.done .check-btn .icon-done { display: block; }
 
@@ -478,11 +488,7 @@
     margin-bottom: 8px;
   }
 
-  .cal-header span {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text);
-  }
+  .cal-header span { font-size: 13px; font-weight: 500; color: var(--text); }
 
   .cal-nav {
     width: 26px;
@@ -497,6 +503,7 @@
     color: var(--text-muted);
     font-size: 16px;
     transition: background 0.12s;
+    font-family: inherit;
   }
 
   .cal-nav:hover { background: var(--surface2); color: var(--text); }
@@ -535,20 +542,10 @@
   .cal-day:hover { background: var(--surface2); }
   .cal-day.other-month { color: var(--text-hint); }
   .cal-day.cal-today { font-weight: 500; color: var(--accent-text); }
-
-  .cal-day.cal-selected {
-    background: var(--accent);
-    color: #fff;
-    font-weight: 500;
-  }
-
+  .cal-day.cal-selected { background: var(--accent); color: #fff; font-weight: 500; }
   .cal-day.cal-selected:hover { background: var(--accent); opacity: 0.88; }
 
-  .cal-footer {
-    margin-top: 8px;
-    display: flex;
-    justify-content: flex-end;
-  }
+  .cal-footer { margin-top: 8px; display: flex; justify-content: flex-end; }
 
   .cal-clear {
     font-size: 12px;
@@ -567,11 +564,10 @@
     font-size: 11px;
     color: var(--text-hint);
     background: none;
-    border: none;
-    cursor: pointer;
-    padding: 2px 6px;
-    border-radius: 100px;
     border: 0.5px solid var(--border);
+    border-radius: 100px;
+    padding: 2px 6px;
+    cursor: pointer;
     font-family: inherit;
     transition: all 0.12s;
   }
@@ -606,7 +602,6 @@
     border-radius: 50%;
     background: var(--success);
     border: none;
-    cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -639,11 +634,7 @@
     border-top: 0.5px solid var(--border);
   }
 
-  .log-date-row input {
-    flex: 1;
-    font-size: 12px;
-    padding: 5px 8px;
-  }
+  .log-date-row input { flex: 1; font-size: 12px; padding: 5px 8px; }
 
   .log-date-btn {
     font-size: 12px;
@@ -710,6 +701,7 @@
     font-size: 13px;
     cursor: pointer;
     transition: all 0.15s;
+    font-family: inherit;
   }
 
   .filter-chip.active {
@@ -720,7 +712,6 @@
 
   .overdue .badge-date { background: var(--danger-bg); color: var(--danger-text); }
 
-  /* Modal */
   .modal-backdrop {
     display: none;
     position: fixed;
@@ -740,9 +731,8 @@
     width: 480px;
     max-width: 95vw;
     border: 0.5px solid var(--border-strong);
+    overflow: visible;
   }
-
-  .modal { overflow: visible; }
 
   .modal h2 { font-size: 15px; font-weight: 500; margin-bottom: 1.25rem; }
 
@@ -763,6 +753,7 @@
       <path d="M5.5 9l2.5 2.5 4-4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
     Task Manager
+    <span class="sync-dot connecting" id="sync-dot" title="Connecting…"></span>
   </h1>
   <nav>
     <button class="active" onclick="showView('dashboard')">Dashboard</button>
@@ -987,85 +978,117 @@
 </div>
 
 <script>
+  // ── Firebase ──────────────────────────────────────────────────────────────
+  firebase.initializeApp({
+    apiKey: "AIzaSyCu7kEFj3TilSnJyxHHkyV_cnC2yobFIOA",
+    authDomain: "task-manager-7c6af.firebaseapp.com",
+    projectId: "task-manager-7c6af",
+    storageBucket: "task-manager-7c6af.firebasestorage.app",
+    messagingSenderId: "512282328231",
+    appId: "1:512282328231:web:957b53091a4f37a56fef82"
+  });
+  const db = firebase.firestore();
+  const tasksCol = db.collection('tasks');
+
+  function setSyncStatus(status) {
+    const dot = document.getElementById('sync-dot');
+    dot.className = 'sync-dot ' + status;
+    dot.title = { connecting: 'Connecting…', saving: 'Saving…', ok: 'Synced', error: 'Sync error — check connection' }[status] || '';
+  }
+
+  // ── App state ─────────────────────────────────────────────────────────────
   let tasks = JSON.parse(localStorage.getItem('tasks') || '[]');
   let editingId = null;
   let activeFilter = 'all';
+  let firestoreReady = false;
 
-  function save() {
+  // ── Persistence ───────────────────────────────────────────────────────────
+  function cacheLocally() {
     localStorage.setItem('tasks', JSON.stringify(tasks));
   }
 
-  function today() {
-    return new Date().toISOString().slice(0, 10);
+  async function saveTask(task) {
+    setSyncStatus('saving');
+    cacheLocally();
+    try {
+      await tasksCol.doc(String(task.id)).set(task);
+      setSyncStatus('ok');
+    } catch (e) {
+      console.error('saveTask:', e);
+      setSyncStatus('error');
+    }
   }
+
+  async function removeTask(id) {
+    setSyncStatus('saving');
+    cacheLocally();
+    try {
+      await tasksCol.doc(String(id)).delete();
+      setSyncStatus('ok');
+    } catch (e) {
+      console.error('removeTask:', e);
+      setSyncStatus('error');
+    }
+  }
+
+  // ── Real-time listener ────────────────────────────────────────────────────
+  function initFirestore() {
+    setSyncStatus('connecting');
+    tasksCol.onSnapshot(snapshot => {
+      const remoteTasks = snapshot.docs.map(d => d.data());
+
+      // First snapshot: if Firestore is empty but localStorage has data, migrate
+      if (!firestoreReady && remoteTasks.length === 0 && tasks.length > 0) {
+        firestoreReady = true;
+        const batch = db.batch();
+        tasks.forEach(t => batch.set(tasksCol.doc(String(t.id)), t));
+        batch.commit().catch(console.error);
+        setSyncStatus('saving');
+        return; // next snapshot will fire and render
+      }
+
+      firestoreReady = true;
+      tasks = remoteTasks.sort((a, b) => (b.id || 0) - (a.id || 0));
+      cacheLocally();
+      setSyncStatus('ok');
+      refresh();
+    }, err => {
+      console.error('onSnapshot:', err);
+      setSyncStatus('error');
+    });
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function today() { return new Date().toISOString().slice(0, 10); }
 
   function fmt(dateStr) {
     if (!dateStr) return '';
-    const d = new Date(dateStr + 'T00:00:00');
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
-  function isOverdue(task) {
-    if (!task.due || task.done) return false;
-    return task.due < today();
-  }
+  function isOverdue(task) { return !task.done && task.due && task.due < today(); }
 
   function daysUntil(dateStr) {
     if (!dateStr) return Infinity;
-    const diff = new Date(dateStr + 'T00:00:00') - new Date(today() + 'T00:00:00');
-    return Math.round(diff / 86400000);
+    return Math.round((new Date(dateStr + 'T00:00:00') - new Date(today() + 'T00:00:00')) / 86400000);
   }
 
+  function esc(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── View routing ──────────────────────────────────────────────────────────
   function showView(name) {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
     document.getElementById('view-' + name).classList.add('active');
-    const btns = document.querySelectorAll('nav button');
     const labels = ['dashboard', 'add', 'all'];
-    btns[labels.indexOf(name)].classList.add('active');
+    document.querySelectorAll('nav button')[labels.indexOf(name)].classList.add('active');
     if (name === 'dashboard') renderDashboard();
     if (name === 'all') renderAll();
   }
 
-  function addTask() {
-    const title = document.getElementById('f-title').value.trim();
-    if (!title) { document.getElementById('f-title').focus(); return; }
-    const recur = document.getElementById('f-recur').value;
-    const recurDays = getSelectedDays('f');
-    const isDayBased = ['weekly', 'biweekly', 'weekdays'].includes(recur);
-    let due = getCalDate('f');
-    if (isDayBased && recurDays.length) {
-      due = recur === 'weekdays'
-        ? nextWeekdaysOccurrence(recurDays, today())
-        : firstOccurrenceFromToday(recurDays[0]);
-    }
-    const task = {
-      id: Date.now(),
-      title,
-      desc: document.getElementById('f-desc').value.trim(),
-      due,
-      priority: document.getElementById('f-priority').value,
-      category: document.getElementById('f-category').value.trim(),
-      recur,
-      recurDays,
-      completedInstances: [],
-      done: false,
-      created: today()
-    };
-    tasks.unshift(task);
-    save();
-    document.getElementById('f-title').value = '';
-    document.getElementById('f-desc').value = '';
-    document.getElementById('f-due').value = '';
-    document.getElementById('f-priority').value = 'medium';
-    document.getElementById('f-category').value = '';
-    document.getElementById('f-recur').value = '';
-    setSelectedDays('f', []);
-    setCalDate('f', null);
-    updateRecurUI('f');
-    showView('dashboard');
-  }
-
+  // ── Recurrence helpers ────────────────────────────────────────────────────
   const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
   function nextDayOccurrence(dayIndex, fromDate, skipWeeks) {
@@ -1094,62 +1117,52 @@
 
   function advanceRecur(task) {
     const due = task.due || today();
-    const recur = task.recur;
     const days = task.recurDays || [];
-    if (recur === 'daily') {
+    if (task.recur === 'daily') {
       const d = new Date(due + 'T00:00:00'); d.setDate(d.getDate() + 1);
       return d.toISOString().slice(0, 10);
     }
-    if (recur === 'weekly' && days.length) return nextDayOccurrence(days[0], due, 1);
-    if (recur === 'biweekly' && days.length) return nextDayOccurrence(days[0], due, 2);
-    if (recur === 'weekdays' && days.length) return nextWeekdaysOccurrence(days, due);
-    if (recur === 'monthly') {
+    if (task.recur === 'weekly' && days.length) return nextDayOccurrence(days[0], due, 1);
+    if (task.recur === 'biweekly' && days.length) return nextDayOccurrence(days[0], due, 2);
+    if (task.recur === 'weekdays' && days.length) return nextWeekdaysOccurrence(days, due);
+    if (task.recur === 'monthly') {
       const d = new Date(due + 'T00:00:00'); d.setMonth(d.getMonth() + 1);
       return d.toISOString().slice(0, 10);
     }
-    if (recur === 'yearly') {
+    if (task.recur === 'yearly') {
       const d = new Date(due + 'T00:00:00'); d.setFullYear(d.getFullYear() + 1);
       return d.toISOString().slice(0, 10);
     }
     return due;
   }
 
+  function recurLabel(task) {
+    const days = (task.recurDays || []).map(d => DAY_NAMES[d]).join(', ');
+    if (task.recur === 'daily') return 'daily';
+    if (task.recur === 'weekly') return days ? 'every ' + days : 'weekly';
+    if (task.recur === 'biweekly') return days ? 'every other ' + days : 'every 2 wks';
+    if (task.recur === 'weekdays') return days || 'weekdays';
+    if (task.recur === 'monthly') return 'monthly';
+    if (task.recur === 'yearly') return 'yearly';
+    return '';
+  }
+
+  // ── Form UI helpers ───────────────────────────────────────────────────────
   function updateRecurUI(prefix) {
     const recur = document.getElementById(prefix + '-recur').value;
-    const daysRow = document.getElementById(prefix + '-days-row');
-    const dueWrap = document.getElementById(prefix + '-due-wrap');
-    const label = document.getElementById(prefix + '-days-label');
-    const dayBtns = document.querySelectorAll('#' + prefix + '-day-picker .day-btn');
-    const dayPicker = document.getElementById(prefix + '-day-picker');
     const isDay = ['weekly', 'biweekly', 'weekdays'].includes(recur);
     const isMulti = recur === 'weekdays';
-
-    daysRow.style.display = isDay ? '' : 'none';
-    dueWrap.style.display = (isDay) ? 'none' : '';
-
-    if (recur === 'weekdays') {
-      label.textContent = 'Repeat on';
-      dayPicker.dataset.multi = '1';
-    } else {
-      label.textContent = 'Day of week';
-      dayPicker.dataset.multi = '0';
-    }
-
-    dayBtns.forEach(btn => {
+    document.getElementById(prefix + '-days-row').style.display = isDay ? '' : 'none';
+    document.getElementById(prefix + '-due-wrap').style.display = isDay ? 'none' : '';
+    document.getElementById(prefix + '-days-label').textContent = isMulti ? 'Repeat on' : 'Day of week';
+    const dayPicker = document.getElementById(prefix + '-day-picker');
+    dayPicker.dataset.multi = isMulti ? '1' : '0';
+    dayPicker.querySelectorAll('.day-btn').forEach(btn => {
       btn.onclick = () => {
-        if (dayPicker.dataset.multi === '0') {
-          dayBtns.forEach(b => b.classList.remove('active'));
-        }
+        if (dayPicker.dataset.multi === '0') dayPicker.querySelectorAll('.day-btn').forEach(b => b.classList.remove('active'));
         btn.classList.toggle('active');
       };
     });
-
-    if (isDay && !isMulti) {
-      const active = dayPicker.querySelector('.day-btn.active');
-      if (active && active.dataset.multi === '1') {
-        dayBtns.forEach(b => { if (b !== active) b.classList.remove('active'); });
-      }
-    }
   }
 
   function getSelectedDays(prefix) {
@@ -1163,6 +1176,43 @@
     });
   }
 
+  // ── Task CRUD ─────────────────────────────────────────────────────────────
+  function addTask() {
+    const title = document.getElementById('f-title').value.trim();
+    if (!title) { document.getElementById('f-title').focus(); return; }
+    const recur = document.getElementById('f-recur').value;
+    const recurDays = getSelectedDays('f');
+    const isDayBased = ['weekly', 'biweekly', 'weekdays'].includes(recur);
+    let due = getCalDate('f');
+    if (isDayBased && recurDays.length) {
+      due = recur === 'weekdays' ? nextWeekdaysOccurrence(recurDays, today()) : firstOccurrenceFromToday(recurDays[0]);
+    }
+    const task = {
+      id: Date.now(),
+      title,
+      desc: document.getElementById('f-desc').value.trim(),
+      due,
+      priority: document.getElementById('f-priority').value,
+      category: document.getElementById('f-category').value.trim(),
+      recur,
+      recurDays,
+      completedInstances: [],
+      done: false,
+      created: today()
+    };
+    tasks.unshift(task);
+    saveTask(task);
+    document.getElementById('f-title').value = '';
+    document.getElementById('f-desc').value = '';
+    document.getElementById('f-priority').value = 'medium';
+    document.getElementById('f-category').value = '';
+    document.getElementById('f-recur').value = '';
+    setSelectedDays('f', []);
+    setCalDate('f', null);
+    updateRecurUI('f');
+    showView('dashboard');
+  }
+
   function toggleDone(id) {
     const t = tasks.find(t => t.id === id);
     if (!t) return;
@@ -1173,14 +1223,14 @@
     } else {
       t.done = !t.done;
     }
-    save(); refresh();
+    saveTask(t); refresh();
   }
 
   function undoInstance(taskId, date) {
     const t = tasks.find(t => t.id === taskId);
     if (!t) return;
     t.completedInstances = (t.completedInstances || []).filter(i => i.date !== date);
-    save(); refresh();
+    saveTask(t); refresh();
   }
 
   function logInstance(taskId) {
@@ -1192,7 +1242,7 @@
     if (t.completedInstances.some(i => i.date === input.value)) return;
     t.completedInstances.unshift({ date: input.value, at: today() });
     t.completedInstances.sort((a, b) => b.date.localeCompare(a.date));
-    save(); refresh();
+    saveTask(t); refresh();
   }
 
   function toggleHistory(id) {
@@ -1202,7 +1252,7 @@
 
   function deleteTask(id) {
     tasks = tasks.filter(t => t.id !== id);
-    save();
+    removeTask(id);
     refresh();
   }
 
@@ -1244,7 +1294,7 @@
         ? nextWeekdaysOccurrence(t.recurDays, today())
         : firstOccurrenceFromToday(t.recurDays[0]);
     }
-    save();
+    saveTask(t);
     closeModal();
     refresh();
   }
@@ -1253,6 +1303,7 @@
     if (e.target === this) closeModal();
   });
 
+  // ── Calendar ──────────────────────────────────────────────────────────────
   const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const calState = {};
   const calDates = { f: null, e: null, rs: null, re: null };
@@ -1268,13 +1319,14 @@
     calDates[prefix] = dateStr || null;
     const display = document.getElementById(prefix + '-cal-display');
     const trigger = document.getElementById(prefix + '-cal-trigger');
+    if (!display || !trigger) return;
     if (dateStr) {
       display.textContent = fmt(dateStr);
       trigger.classList.add('has-date');
       const d = new Date(dateStr + 'T00:00:00');
       calState[prefix] = { month: d.getMonth(), year: d.getFullYear() };
     } else {
-      display.textContent = 'Pick a date';
+      display.textContent = prefix === 'rs' ? 'Start date' : prefix === 're' ? 'End date' : 'Pick a date';
       trigger.classList.remove('has-date');
     }
   }
@@ -1282,7 +1334,10 @@
   function toggleCal(prefix) {
     const popup = document.getElementById(prefix + '-cal-popup');
     const isOpen = popup.classList.contains('open');
-    ['f','e'].forEach(p => document.getElementById(p + '-cal-popup').classList.remove('open'));
+    ['f','e','rs','re'].forEach(p => {
+      const el = document.getElementById(p + '-cal-popup');
+      if (el) el.classList.remove('open');
+    });
     if (!isOpen) { renderCal(prefix); popup.classList.add('open'); }
   }
 
@@ -1296,8 +1351,7 @@
 
   function renderCal(prefix) {
     const { month, year } = calState[prefix];
-    const td = today();
-    const sel = calDates[prefix];
+    const td = today(), sel = calDates[prefix];
     document.getElementById(prefix + '-cal-title').textContent = MONTHS[month] + ' ' + year;
     const firstDay = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -1305,8 +1359,7 @@
     let html = ['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => `<div class="cal-dow">${d}</div>`).join('');
     for (let i = firstDay - 1; i >= 0; i--) {
       const d = prevDays - i;
-      const pm = month === 0 ? 11 : month - 1;
-      const py = month === 0 ? year - 1 : year;
+      const pm = month === 0 ? 11 : month - 1, py = month === 0 ? year - 1 : year;
       const ds = `${py}-${String(pm+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
       html += `<button class="cal-day other-month" onclick="pickDate('${prefix}','${ds}')">${d}</button>`;
     }
@@ -1317,8 +1370,7 @@
     }
     const total = Math.ceil((firstDay + daysInMonth) / 7) * 7;
     for (let d = 1; d <= total - firstDay - daysInMonth; d++) {
-      const nm = month === 11 ? 0 : month + 1;
-      const ny = month === 11 ? year + 1 : year;
+      const nm = month === 11 ? 0 : month + 1, ny = month === 11 ? year + 1 : year;
       const ds = `${ny}-${String(nm+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
       html += `<button class="cal-day other-month" onclick="pickDate('${prefix}','${ds}')">${d}</button>`;
     }
@@ -1339,39 +1391,33 @@
 
   document.addEventListener('click', e => {
     ['f','e','rs','re'].forEach(prefix => {
-      const wrap = document.getElementById(prefix + '-cal-popup');
-      if (!wrap) return;
+      const popup = document.getElementById(prefix + '-cal-popup');
+      if (!popup) return;
       const trigger = document.getElementById(prefix + '-cal-trigger');
-      if (!wrap.contains(e.target) && e.target !== trigger && !trigger.contains(e.target)) {
-        wrap.classList.remove('open');
+      if (!popup.contains(e.target) && e.target !== trigger && !trigger.contains(e.target)) {
+        popup.classList.remove('open');
       }
     });
   });
 
-  function recurLabel(task) {
-    const days = (task.recurDays || []).map(d => DAY_NAMES[d]).join(', ');
-    if (task.recur === 'daily') return 'daily';
-    if (task.recur === 'weekly') return days ? 'every ' + days : 'weekly';
-    if (task.recur === 'biweekly') return days ? 'every other ' + days : 'every 2 wks';
-    if (task.recur === 'weekdays') return days || 'weekdays';
-    if (task.recur === 'monthly') return 'monthly';
-    if (task.recur === 'yearly') return 'yearly';
-    return '';
-  }
-
+  // ── Rendering ─────────────────────────────────────────────────────────────
   function taskHTML(task, showDate = true) {
     const overdue = isOverdue(task);
     const days = daysUntil(task.due);
     let dateBadge = '';
     if (task.due) {
-      const label = task.done ? fmt(task.due) : overdue ? `Overdue · ${fmt(task.due)}` : days === 0 ? 'Due today' : days === 1 ? 'Tomorrow' : fmt(task.due);
+      const label = task.done ? fmt(task.due)
+        : overdue ? `Overdue · ${fmt(task.due)}`
+        : days === 0 ? 'Due today'
+        : days === 1 ? 'Tomorrow'
+        : fmt(task.due);
       dateBadge = `<span class="badge badge-date">${label}</span>`;
     }
     const instances = task.completedInstances || [];
     const checkSvg = `<svg class="it-check" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1.5 5l2.5 2.5 4.5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     const xSvg = `<svg class="it-x" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
     const instanceHistory = task.recur ? `
-      ${instances.length || true ? `<div class="instance-history" id="hist-${task.id}">
+      <div class="instance-history" id="hist-${task.id}">
         <div class="instance-list">
           ${instances.map(i => `
             <div class="instance-item" onclick="undoInstance(${task.id},'${i.date}')" title="Click to undo">
@@ -1383,7 +1429,7 @@
           <input type="date" id="log-${task.id}" max="${today()}" />
           <button class="log-date-btn" onclick="logInstance(${task.id})">+ Log date</button>
         </div>
-      </div>` : ''}` : '';
+      </div>` : '';
     const historyBtn = task.recur
       ? `<button class="history-toggle" onclick="toggleHistory(${task.id})">${instances.length ? instances.length + ' completed' : 'Log dates'}</button>`
       : '';
@@ -1396,7 +1442,7 @@
       : '';
     return `
       <div class="task-item ${task.done ? 'done' : ''} ${overdue && !task.done ? 'overdue' : ''}" data-id="${task.id}">
-        <button class="check-btn" onclick="toggleDone(${task.id})" title="${task.done ? 'Mark incomplete' : 'Mark complete'}" aria-label="${task.done ? 'Mark incomplete' : 'Mark complete'}">
+        <button class="check-btn" onclick="toggleDone(${task.id})" title="${task.done ? 'Mark incomplete' : 'Mark complete'}">
           ${checkIcon}
         </button>
         <div class="task-body">
@@ -1419,10 +1465,6 @@
       </div>`;
   }
 
-  function esc(str) {
-    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-
   function onPeriodChange() {
     const val = document.getElementById('period-select').value;
     document.getElementById('range-picker-row').classList.toggle('open', val === 'custom');
@@ -1432,21 +1474,17 @@
   function renderDashboard() {
     const periodVal = document.getElementById('period-select').value;
     const td = today();
-
     const overdue = tasks.filter(t => !t.done && t.due && t.due < td);
     const noDue = tasks.filter(t => !t.done && !t.due);
     const doneCount = tasks.reduce((sum, t) =>
       sum + (t.recur ? (t.completedInstances || []).length : (t.done ? 1 : 0)), 0);
 
-    let upcoming = [];
-    let upcomingLabel = '';
-
+    let upcoming = [], upcomingLabel = '';
     if (periodVal === 'today') {
       upcoming = tasks.filter(t => !t.done && t.due === td).sort((a,b) => a.due.localeCompare(b.due));
       upcomingLabel = 'Due today';
     } else if (periodVal === 'custom') {
-      const rs = getCalDate('rs');
-      const re = getCalDate('re');
+      const rs = getCalDate('rs'), re = getCalDate('re');
       upcoming = tasks.filter(t => {
         if (t.done || !t.due) return false;
         if (rs && t.due < rs) return false;
@@ -1458,60 +1496,39 @@
       const period = parseInt(periodVal);
       upcoming = tasks.filter(t => {
         if (t.done || !t.due || t.due < td) return false;
-        if (period === 0) return true;
-        return daysUntil(t.due) <= period;
+        return period === 0 || daysUntil(t.due) <= period;
       }).sort((a,b) => a.due.localeCompare(b.due));
       upcomingLabel = period === 0 ? 'All upcoming' : `Next ${period} days`;
     }
 
     document.getElementById('stats-row').innerHTML = `
-      <div class="stat-card danger">
-        <div class="label">Overdue</div>
-        <div class="value">${overdue.length}</div>
-      </div>
-      <div class="stat-card warning">
-        <div class="label">Upcoming</div>
-        <div class="value">${upcoming.length}</div>
-      </div>
-      <div class="stat-card accent">
-        <div class="label">No due date</div>
-        <div class="value">${noDue.length}</div>
-      </div>
-      <div class="stat-card success">
-        <div class="label">Completed</div>
-        <div class="value">${doneCount}</div>
-      </div>
-    `;
+      <div class="stat-card danger"><div class="label">Overdue</div><div class="value">${overdue.length}</div></div>
+      <div class="stat-card warning"><div class="label">Upcoming</div><div class="value">${upcoming.length}</div></div>
+      <div class="stat-card accent"><div class="label">No due date</div><div class="value">${noDue.length}</div></div>
+      <div class="stat-card success"><div class="label">Completed</div><div class="value">${doneCount}</div></div>`;
 
     const overdueEl = document.getElementById('overdue-section');
-    if (overdue.length) {
-      overdueEl.innerHTML = `<div class="section-label">Overdue</div><div class="task-list">${overdue.map(t => taskHTML(t)).join('')}</div>`;
-    } else {
-      overdueEl.innerHTML = '';
-    }
+    overdueEl.innerHTML = overdue.length
+      ? `<div class="section-label">Overdue</div><div class="task-list">${overdue.map(t => taskHTML(t)).join('')}</div>`
+      : '';
 
     const upcomingEl = document.getElementById('upcoming-section');
-    if (upcoming.length) {
-      upcomingEl.innerHTML = `<div class="section-label">${upcomingLabel}</div><div class="task-list">${upcoming.map(t => taskHTML(t)).join('')}</div>`;
-    } else {
-      upcomingEl.innerHTML = `<div class="section-label">${upcomingLabel || 'Upcoming'}</div><div class="empty-state">No tasks in this period.</div>`;
-    }
+    upcomingEl.innerHTML = upcoming.length
+      ? `<div class="section-label">${upcomingLabel}</div><div class="task-list">${upcoming.map(t => taskHTML(t)).join('')}</div>`
+      : `<div class="section-label">${upcomingLabel || 'Upcoming'}</div><div class="empty-state">No tasks in this period.</div>`;
 
     const pendingEl = document.getElementById('pending-section');
-    if (noDue.length) {
-      pendingEl.innerHTML = `<div class="section-label">No due date</div><div class="task-list">${noDue.map(t => taskHTML(t, false)).join('')}</div>`;
-    } else {
-      pendingEl.innerHTML = '';
-    }
+    pendingEl.innerHTML = noDue.length
+      ? `<div class="section-label">No due date</div><div class="task-list">${noDue.map(t => taskHTML(t, false)).join('')}</div>`
+      : '';
 
     updateCategoryList();
   }
 
   function renderAll() {
     const cats = [...new Set(tasks.map(t => t.category).filter(Boolean))];
-    const filterRow = document.getElementById('filter-row');
-    const chips = [['all', 'All'], ['pending', 'Pending'], ['done', 'Done'], ...cats.map(c => [c, c])];
-    filterRow.innerHTML = chips.map(([val, label]) =>
+    const chips = [['all','All'],['pending','Pending'],['done','Done'], ...cats.map(c => [c,c])];
+    document.getElementById('filter-row').innerHTML = chips.map(([val, label]) =>
       `<button class="filter-chip ${activeFilter === val ? 'active' : ''}" onclick="setFilter('${val}')">${label}</button>`
     ).join('');
 
@@ -1527,16 +1544,14 @@
       return a.due.localeCompare(b.due);
     });
 
-    const list = document.getElementById('all-tasks-list');
-    list.innerHTML = sorted.length ? sorted.map(t => taskHTML(t)).join('') : '<div class="empty-state">No tasks here.</div>';
+    document.getElementById('all-tasks-list').innerHTML = sorted.length
+      ? sorted.map(t => taskHTML(t)).join('')
+      : '<div class="empty-state">No tasks here.</div>';
 
     updateCategoryList();
   }
 
-  function setFilter(val) {
-    activeFilter = val;
-    renderAll();
-  }
+  function setFilter(val) { activeFilter = val; renderAll(); }
 
   function updateCategoryList() {
     const cats = [...new Set(tasks.map(t => t.category).filter(Boolean))];
@@ -1544,16 +1559,17 @@
   }
 
   function refresh() {
-    const active = document.querySelector('.view.active').id.replace('view-', '');
-    if (active === 'dashboard') renderDashboard();
-    if (active === 'all') renderAll();
+    const activeView = document.querySelector('.view.active');
+    if (!activeView) return;
+    const name = activeView.id.replace('view-', '');
+    if (name === 'dashboard') renderDashboard();
+    if (name === 'all') renderAll();
   }
 
-  initCal('f');
-  initCal('e');
-  initCal('rs');
-  initCal('re');
+  // ── Init ──────────────────────────────────────────────────────────────────
+  ['f','e','rs','re'].forEach(initCal);
   renderDashboard();
+  initFirestore();
 </script>
 </body>
 </html>
