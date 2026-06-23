@@ -712,6 +712,9 @@
 
   .overdue .badge-date { background: var(--danger-bg); color: var(--danger-text); }
 
+  .ends-row-inner { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .ends-row-inner select { flex: 1; min-width: 140px; }
+
   .modal-backdrop {
     display: none;
     position: fixed;
@@ -888,6 +891,22 @@
             <button type="button" class="day-btn" data-day="0">Sun</button>
           </div>
         </div>
+        <div class="full" id="f-ends-row" style="display:none">
+          <label>Ends</label>
+          <div class="ends-row-inner">
+            <select id="f-end-type" onchange="updateEndsUI('f')">
+              <option value="">Never</option>
+              <option value="date">On date</option>
+              <option value="count">After occurrences</option>
+            </select>
+            <div id="f-end-date-wrap" style="display:none;flex:1;min-width:130px">
+              <input type="date" id="f-end-date" />
+            </div>
+            <div id="f-end-count-wrap" style="display:none;flex:1;min-width:130px">
+              <input type="number" id="f-end-count" min="1" max="999" placeholder="e.g. 10" />
+            </div>
+          </div>
+        </div>
       </div>
       <div class="form-actions">
         <button class="btn-primary" onclick="addTask()">Add task</button>
@@ -967,6 +986,22 @@
           <button type="button" class="day-btn" data-day="5">Fri</button>
           <button type="button" class="day-btn" data-day="6">Sat</button>
           <button type="button" class="day-btn" data-day="0">Sun</button>
+        </div>
+      </div>
+      <div class="full" id="e-ends-row" style="display:none">
+        <label>Ends</label>
+        <div class="ends-row-inner">
+          <select id="e-end-type" onchange="updateEndsUI('e')">
+            <option value="">Never</option>
+            <option value="date">On date</option>
+            <option value="count">After occurrences</option>
+          </select>
+          <div id="e-end-date-wrap" style="display:none;flex:1;min-width:130px">
+            <input type="date" id="e-end-date" />
+          </div>
+          <div id="e-end-count-wrap" style="display:none;flex:1;min-width:130px">
+            <input type="number" id="e-end-count" min="1" max="999" placeholder="e.g. 10" />
+          </div>
         </div>
       </div>
     </div>
@@ -1152,9 +1187,15 @@
     const recur = document.getElementById(prefix + '-recur').value;
     const isDay = ['weekly', 'biweekly', 'weekdays'].includes(recur);
     const isMulti = recur === 'weekdays';
+    const hasRecur = recur !== '';
     document.getElementById(prefix + '-days-row').style.display = isDay ? '' : 'none';
     document.getElementById(prefix + '-due-wrap').style.display = isDay ? 'none' : '';
     document.getElementById(prefix + '-days-label').textContent = isMulti ? 'Repeat on' : 'Day of week';
+    document.getElementById(prefix + '-ends-row').style.display = hasRecur ? '' : 'none';
+    if (!hasRecur) {
+      document.getElementById(prefix + '-end-type').value = '';
+      updateEndsUI(prefix);
+    }
     const dayPicker = document.getElementById(prefix + '-day-picker');
     dayPicker.dataset.multi = isMulti ? '1' : '0';
     dayPicker.querySelectorAll('.day-btn').forEach(btn => {
@@ -1163,6 +1204,12 @@
         btn.classList.toggle('active');
       };
     });
+  }
+
+  function updateEndsUI(prefix) {
+    const type = document.getElementById(prefix + '-end-type').value;
+    document.getElementById(prefix + '-end-date-wrap').style.display = type === 'date' ? '' : 'none';
+    document.getElementById(prefix + '-end-count-wrap').style.display = type === 'count' ? '' : 'none';
   }
 
   function getSelectedDays(prefix) {
@@ -1187,6 +1234,7 @@
     if (isDayBased && recurDays.length) {
       due = recur === 'weekdays' ? nextWeekdaysOccurrence(recurDays, today()) : firstOccurrenceFromToday(recurDays[0]);
     }
+    const endType = document.getElementById('f-end-type').value;
     const task = {
       id: Date.now(),
       title,
@@ -1196,6 +1244,9 @@
       category: document.getElementById('f-category').value.trim(),
       recur,
       recurDays,
+      recurEndType: endType,
+      recurEndDate: endType === 'date' ? document.getElementById('f-end-date').value : '',
+      recurEndCount: endType === 'count' ? (parseInt(document.getElementById('f-end-count').value) || null) : null,
       completedInstances: [],
       done: false,
       created: today()
@@ -1207,6 +1258,9 @@
     document.getElementById('f-priority').value = 'medium';
     document.getElementById('f-category').value = '';
     document.getElementById('f-recur').value = '';
+    document.getElementById('f-end-type').value = '';
+    document.getElementById('f-end-date').value = '';
+    document.getElementById('f-end-count').value = '';
     setSelectedDays('f', []);
     setCalDate('f', null);
     updateRecurUI('f');
@@ -1219,7 +1273,17 @@
     if (t.recur) {
       if (!t.completedInstances) t.completedInstances = [];
       t.completedInstances.unshift({ date: t.due || today(), at: today() });
-      t.due = advanceRecur(t);
+      const nextDue = advanceRecur(t);
+      let ended = false;
+      if (t.recurEndType === 'date' && t.recurEndDate && nextDue > t.recurEndDate) ended = true;
+      if (t.recurEndType === 'count' && t.recurEndCount && t.completedInstances.length >= t.recurEndCount) ended = true;
+      if (ended) {
+        t.recur = '';
+        t.recurDays = [];
+        t.done = true;
+      } else {
+        t.due = nextDue;
+      }
     } else {
       t.done = !t.done;
     }
@@ -1268,6 +1332,10 @@
     document.getElementById('e-recur').value = t.recur || '';
     updateRecurUI('e');
     setSelectedDays('e', t.recurDays || []);
+    document.getElementById('e-end-type').value = t.recurEndType || '';
+    document.getElementById('e-end-date').value = t.recurEndDate || '';
+    document.getElementById('e-end-count').value = t.recurEndCount || '';
+    updateEndsUI('e');
     document.getElementById('edit-modal').classList.add('open');
   }
 
@@ -1288,6 +1356,10 @@
     t.category = document.getElementById('e-category').value.trim();
     t.recur = document.getElementById('e-recur').value;
     t.recurDays = getSelectedDays('e');
+    const eEndType = document.getElementById('e-end-type').value;
+    t.recurEndType = eEndType;
+    t.recurEndDate = eEndType === 'date' ? document.getElementById('e-end-date').value : '';
+    t.recurEndCount = eEndType === 'count' ? (parseInt(document.getElementById('e-end-count').value) || null) : null;
     const isDayBased = ['weekly', 'biweekly', 'weekdays'].includes(t.recur);
     if (isDayBased && t.recurDays.length && !t.due) {
       t.due = t.recur === 'weekdays'
@@ -1452,6 +1524,8 @@
             <span class="badge badge-priority-${task.priority}">${task.priority}</span>
             ${task.category ? `<span class="badge badge-category">${esc(task.category)}</span>` : ''}
             ${task.recur ? `<span class="badge badge-recur">↻ ${recurLabel(task)}</span>` : ''}
+            ${task.recur && task.recurEndType === 'date' && task.recurEndDate ? `<span class="badge badge-recur">ends ${fmt(task.recurEndDate)}</span>` : ''}
+            ${task.recur && task.recurEndType === 'count' && task.recurEndCount ? `<span class="badge badge-recur">${(task.completedInstances||[]).length}/${task.recurEndCount} done</span>` : ''}
             ${showDate ? dateBadge : ''}
             ${historyBtn}
             ${undoChip}
