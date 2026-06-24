@@ -729,23 +729,31 @@
     align-items: start;
   }
   .group-col { min-width: 0; }
-  .group-block { margin-bottom: 0; }
   .group-header {
-    display: flex; align-items: center; gap: 10px;
-    margin: 0 0 0.75rem; font-size: 13px; font-weight: 600;
-    color: var(--text);
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 10px 14px;
+    background: var(--surface); border: 0.5px solid var(--border);
+    border-radius: var(--radius-lg); cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    user-select: none;
   }
-  .group-header::before, .group-header::after {
-    content: ''; flex: 1; height: 0.5px; background: var(--border-strong);
+  .group-header:hover { background: var(--surface2); border-color: var(--border-strong); }
+  .group-header-left { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text); }
+  .group-header-right { display: flex; align-items: center; gap: 8px; }
+  .group-count {
+    font-size: 11px; font-weight: 500; color: var(--text-muted);
+    background: var(--surface2); border: 0.5px solid var(--border);
+    border-radius: 100px; padding: 1px 8px; white-space: nowrap;
   }
+  .group-chevron { color: var(--text-hint); transition: transform 0.2s ease; flex-shrink: 0; }
+  .group-chevron.open { transform: rotate(180deg); }
+  .group-body { display: none; margin-top: 8px; }
+  .group-body.open { display: block; }
   .group-tag {
-    display: flex; align-items: center; gap: 5px;
-    padding: 3px 10px; border-radius: 100px;
-    border: 0.5px solid var(--border-strong);
-    background: var(--surface); white-space: nowrap;
+    display: flex; align-items: center; gap: 5px; white-space: nowrap;
   }
-  .group-tag.recurring { border-color: var(--accent); background: var(--accent-bg); color: var(--accent-text); }
-  .group-tag.onetime   { border-color: var(--border-strong); background: var(--surface); color: var(--text-muted); }
+  .group-tag.recurring { color: var(--accent-text); }
+  .group-tag.onetime   { color: var(--text-muted); }
 
   .search-bar-wrap {
     display: flex; align-items: center; gap: 10px;
@@ -1722,26 +1730,40 @@
     const recurSvg   = `<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 7a5 5 0 0 1 9-3M12 7a5 5 0 0 1-9 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M10.5 3.5 11 4l1-1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.5 10.5 3 10l-1 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
     const calSvg = `<svg width="13" height="13" viewBox="0 0 18 18" fill="none"><rect x="1" y="3" width="16" height="14" rx="2" stroke="currentColor" stroke-width="1.4"/><path d="M1 7h16" stroke="currentColor" stroke-width="1.4"/><path d="M5 1v4M13 1v4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`;
-    const gcalCol = gCalToken ? `
+    const chevronSvg = id => `<svg class="group-chevron ${groupState[id] ? 'open' : ''}" id="group-chevron-${id}" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+    function groupCol(key, tagClass, icon, label, body, count) {
+      const open = !!groupState[key];
+      return `
         <div class="group-col">
-          <div class="group-header"><span class="group-tag onetime">${calSvg} Google Calendar</span></div>
-          <div class="group-block">
-            ${gCalEvents.length
-              ? `<div class="task-list">${gCalEvents.map(gcalEventHTML).join('')}</div>`
-              : `<div class="empty-state">No events in this period.</div>`}
+          <div class="group-header" onclick="toggleGroup('${key}')">
+            <div class="group-header-left">
+              <span class="group-tag ${tagClass}">${icon} ${label}</span>
+            </div>
+            <div class="group-header-right">
+              ${count > 0 ? `<span class="group-count">${count}</span>` : ''}
+              ${chevronSvg(key)}
+            </div>
           </div>
-        </div>` : '';
+          <div class="group-body ${open ? 'open' : ''}" id="group-body-${key}">${body}</div>
+        </div>`;
+    }
+
+    const otCount  = otOverdue.length + otUpcoming.length + otNoDue.length;
+    const recCount = recOverdue.length + recUpcoming.length + recNoDue.length;
+
+    const gcalCol = gCalToken ? groupCol(
+      'gcal', 'onetime', calSvg, 'Google Calendar',
+      gCalEvents.length
+        ? `<div class="task-list">${gCalEvents.map(gcalEventHTML).join('')}</div>`
+        : `<div class="empty-state">No events in this period.</div>`,
+      gCalEvents.length
+    ) : '';
 
     document.getElementById('dashboard-groups').innerHTML = `
       <div class="groups-columns">
-        <div class="group-col">
-          <div class="group-header"><span class="group-tag onetime">${oneTimeSvg} One-time tasks</span></div>
-          <div class="group-block">${groupBody(otOverdue, otUpcoming, otNoDue, 'one-time tasks')}</div>
-        </div>
-        <div class="group-col">
-          <div class="group-header"><span class="group-tag recurring">${recurSvg} Recurring tasks</span></div>
-          <div class="group-block">${groupBody(recOverdue, recUpcoming, recNoDue, 'recurring tasks')}</div>
-        </div>
+        ${groupCol('onetime',  'onetime',   oneTimeSvg, 'One-time tasks',  groupBody(otOverdue,  otUpcoming,  otNoDue,  'one-time tasks'),  otCount)}
+        ${groupCol('recurring','recurring', recurSvg,   'Recurring tasks', groupBody(recOverdue, recUpcoming, recNoDue, 'recurring tasks'), recCount)}
         ${gcalCol}
       </div>`;
 
@@ -1787,6 +1809,16 @@
     const name = activeView.id.replace('view-', '');
     if (name === 'dashboard') renderDashboard();
     if (name === 'all') renderAll();
+  }
+
+  // ── Collapsible groups ────────────────────────────────────────────────────
+  let groupState = JSON.parse(localStorage.getItem('dashGroupState') || '{}');
+
+  function toggleGroup(key) {
+    groupState[key] = !groupState[key];
+    localStorage.setItem('dashGroupState', JSON.stringify(groupState));
+    document.getElementById('group-body-' + key).classList.toggle('open', groupState[key]);
+    document.getElementById('group-chevron-' + key).classList.toggle('open', groupState[key]);
   }
 
   // ── Search ───────────────────────────────────────────────────────────────
