@@ -6,6 +6,7 @@
 <title>Task Manager</title>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer onload="initGoogleAuth()"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -715,6 +716,25 @@
   .ends-row-inner { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .ends-row-inner select { flex: 1; min-width: 140px; }
 
+  .gcal-connect-btn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 12px; border-radius: var(--radius);
+    border: 0.5px solid var(--border-strong);
+    background: transparent; color: var(--text-muted);
+    font-size: 13px; cursor: pointer; font-family: inherit;
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .gcal-connect-btn:hover { background: var(--surface2); color: var(--text); border-color: var(--accent); }
+  .gcal-connect-btn.connected { color: var(--success-text); border-color: var(--success); background: var(--success-bg); }
+  .gcal-connect-btn.connected:hover { background: var(--danger-bg); color: var(--danger-text); border-color: var(--danger); }
+
+  .gcal-item { cursor: default; }
+  .gcal-icon { width: 26px; height: 26px; min-width: 26px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .badge-gcal { background: #e8f0fe; color: #1a73e8; }
+  @media (prefers-color-scheme: dark) { .badge-gcal { background: #1a2d5a; color: #8ab4f8; } }
+  .gcal-link { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: var(--radius); color: var(--text-hint); text-decoration: none; font-size: 14px; flex-shrink: 0; transition: background 0.15s, color 0.15s; }
+  .gcal-link:hover { background: var(--surface2); color: var(--text); }
+
   .modal-backdrop {
     display: none;
     position: fixed;
@@ -758,6 +778,14 @@
     Task Manager
     <span class="sync-dot connecting" id="sync-dot" title="Connecting…"></span>
   </h1>
+  <button id="gcal-btn" class="gcal-connect-btn" onclick="toggleGCal()" title="Connect Google Calendar">
+    <svg width="14" height="14" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <rect x="1" y="3" width="16" height="14" rx="2" stroke="currentColor" stroke-width="1.4"/>
+      <path d="M1 7h16" stroke="currentColor" stroke-width="1.4"/>
+      <path d="M5 1v4M13 1v4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+    </svg>
+    <span id="gcal-btn-label">Connect Calendar</span>
+  </button>
   <nav>
     <button class="active" onclick="showView('dashboard')">Dashboard</button>
     <button onclick="showView('add')">Add task</button>
@@ -818,6 +846,7 @@
       </div>
     </div>
 
+    <div id="gcal-section"></div>
     <div id="overdue-section"></div>
     <div id="upcoming-section"></div>
     <div id="pending-section"></div>
@@ -1452,13 +1481,17 @@
   function pickDate(prefix, dateStr) {
     setCalDate(prefix, dateStr);
     document.getElementById(prefix + '-cal-popup').classList.remove('open');
-    if (prefix === 'rs' || prefix === 're') renderDashboard();
+    if (prefix === 'rs' || prefix === 're') {
+      if (gCalToken) fetchCalendarEvents(); else renderDashboard();
+    }
   }
 
   function clearCal(prefix) {
     setCalDate(prefix, null);
     document.getElementById(prefix + '-cal-popup').classList.remove('open');
-    if (prefix === 'rs' || prefix === 're') renderDashboard();
+    if (prefix === 'rs' || prefix === 're') {
+      if (gCalToken) fetchCalendarEvents(); else renderDashboard();
+    }
   }
 
   document.addEventListener('click', e => {
@@ -1542,7 +1575,8 @@
   function onPeriodChange() {
     const val = document.getElementById('period-select').value;
     document.getElementById('range-picker-row').classList.toggle('open', val === 'custom');
-    renderDashboard();
+    if (gCalToken) fetchCalendarEvents();
+    else renderDashboard();
   }
 
   function renderDashboard() {
@@ -1580,6 +1614,15 @@
       <div class="stat-card warning"><div class="label">Upcoming</div><div class="value">${upcoming.length}</div></div>
       <div class="stat-card accent"><div class="label">No due date</div><div class="value">${noDue.length}</div></div>
       <div class="stat-card success"><div class="label">Completed</div><div class="value">${doneCount}</div></div>`;
+
+    const gcalEl = document.getElementById('gcal-section');
+    if (gCalToken) {
+      gcalEl.innerHTML = gCalEvents.length
+        ? `<div class="section-label">Google Calendar</div><div class="task-list">${gCalEvents.map(gcalEventHTML).join('')}</div>`
+        : `<div class="section-label">Google Calendar</div><div class="empty-state">No events in this period.</div>`;
+    } else {
+      gcalEl.innerHTML = '';
+    }
 
     const overdueEl = document.getElementById('overdue-section');
     overdueEl.innerHTML = overdue.length
@@ -1638,6 +1681,117 @@
     const name = activeView.id.replace('view-', '');
     if (name === 'dashboard') renderDashboard();
     if (name === 'all') renderAll();
+  }
+
+  // ── Google Calendar ───────────────────────────────────────────────────────
+  const GCAL_CLIENT_ID = '512282328231-jo41stl60a1ifl7mvnkaaibg8s6ogoov.apps.googleusercontent.com';
+  const GCAL_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+  let gCalToken = null;
+  let gCalEvents = [];
+  let gisClient = null;
+
+  function initGoogleAuth() {
+    if (!window.google) return;
+    gisClient = google.accounts.oauth2.initTokenClient({
+      client_id: GCAL_CLIENT_ID,
+      scope: GCAL_SCOPE,
+      callback: (resp) => {
+        if (resp.error) { console.error('GCal auth:', resp); return; }
+        gCalToken = resp.access_token;
+        updateGCalBtn();
+        fetchCalendarEvents();
+      }
+    });
+  }
+
+  function toggleGCal() {
+    if (gCalToken) {
+      google.accounts.oauth2.revoke(gCalToken, () => {});
+      gCalToken = null;
+      gCalEvents = [];
+      updateGCalBtn();
+      renderDashboard();
+    } else {
+      if (!gisClient) { alert('Google auth is still loading — try again in a moment.'); return; }
+      gisClient.requestAccessToken();
+    }
+  }
+
+  function updateGCalBtn() {
+    const btn = document.getElementById('gcal-btn');
+    const label = document.getElementById('gcal-btn-label');
+    if (gCalToken) {
+      btn.classList.add('connected');
+      label.textContent = 'Disconnect Calendar';
+      btn.title = 'Disconnect Google Calendar';
+    } else {
+      btn.classList.remove('connected');
+      label.textContent = 'Connect Calendar';
+      btn.title = 'Connect Google Calendar';
+    }
+  }
+
+  function gcalTimeRange() {
+    const pv = document.getElementById('period-select').value;
+    const td = today();
+    const toISO = (d, end) => {
+      const dt = new Date(d + (end ? 'T23:59:59' : 'T00:00:00'));
+      return dt.toISOString();
+    };
+    if (pv === 'today') return { min: toISO(td, false), max: toISO(td, true) };
+    if (pv === 'custom') {
+      const rs = getCalDate('rs'), re = getCalDate('re');
+      return { min: toISO(rs || td, false), max: re ? toISO(re, true) : null };
+    }
+    const days = parseInt(pv) || 365;
+    const end = new Date(td + 'T23:59:59');
+    end.setDate(end.getDate() + days);
+    return { min: toISO(td, false), max: end.toISOString() };
+  }
+
+  async function fetchCalendarEvents() {
+    if (!gCalToken) return;
+    const { min, max } = gcalTimeRange();
+    let url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?singleEvents=true&orderBy=startTime&maxResults=50&timeMin=${encodeURIComponent(min)}`;
+    if (max) url += `&timeMax=${encodeURIComponent(max)}`;
+    try {
+      const resp = await fetch(url, { headers: { Authorization: `Bearer ${gCalToken}` } });
+      if (resp.status === 401) { toggleGCal(); return; }
+      const data = await resp.json();
+      gCalEvents = (data.items || []).filter(e => e.status !== 'cancelled');
+    } catch (e) {
+      console.error('Calendar fetch:', e);
+      gCalEvents = [];
+    }
+    renderDashboard();
+  }
+
+  function gcalEventHTML(event) {
+    const startDate = event.start.date || (event.start.dateTime || '').slice(0, 10);
+    const isAllDay = !!event.start.date;
+    const timeLabel = !isAllDay && event.start.dateTime
+      ? new Date(event.start.dateTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+      : fmt(startDate);
+    const desc = (event.description || '').replace(/<[^>]+>/g, '').trim();
+    return `<div class="task-item gcal-item">
+      <div class="gcal-icon">
+        <svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+          <rect x="1" y="3" width="16" height="14" rx="2" stroke="#1a73e8" stroke-width="1.4"/>
+          <path d="M1 7h16" stroke="#1a73e8" stroke-width="1.4"/>
+          <path d="M5 1v4M13 1v4" stroke="#1a73e8" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="task-body">
+        <div class="task-title">${esc(event.summary || '(No title)')}</div>
+        ${desc ? `<div class="task-desc">${esc(desc.slice(0, 120))}${desc.length > 120 ? '…' : ''}</div>` : ''}
+        <div class="task-meta">
+          <span class="badge badge-gcal">Google Calendar</span>
+          ${startDate ? `<span class="badge badge-date">${timeLabel}</span>` : ''}
+          ${event.location ? `<span class="badge badge-recur">${esc(event.location)}</span>` : ''}
+        </div>
+      </div>
+      ${event.htmlLink ? `<a href="${event.htmlLink}" target="_blank" rel="noopener" class="gcal-link" title="Open in Google Calendar">↗</a>` : ''}
+    </div>`;
   }
 
   // ── Init ──────────────────────────────────────────────────────────────────
