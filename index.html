@@ -755,6 +755,24 @@
   .group-tag.recurring { color: var(--accent-text); }
   .group-tag.onetime   { color: var(--text-muted); }
 
+  .date-group-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 2px 5px; margin-top: 10px; margin-bottom: 5px;
+    border-bottom: 0.5px solid var(--border);
+  }
+  .date-group-header:first-child { margin-top: 6px; }
+  .date-group-label {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--text-muted);
+  }
+  .date-group-count {
+    font-size: 10px; color: var(--text-hint);
+    background: var(--surface2); border-radius: 100px; padding: 1px 6px;
+  }
+  .date-group-header.overdue-header .date-group-label { color: var(--danger-text); }
+  .date-group-header.today-header .date-group-label { color: var(--accent-text); }
+  .date-group-tasks { margin-bottom: 2px; }
+
   .search-bar-wrap {
     display: flex; align-items: center; gap: 10px;
     background: var(--surface); border: 0.5px solid var(--border-strong);
@@ -1716,13 +1734,56 @@
       <div class="stat-card accent"><div class="label">No due date</div><div class="value">${totalNoDue}</div></div>
       <div class="stat-card success"><div class="label">Completed</div><div class="value">${doneCount}</div></div>`;
 
-    // Build one group block's inner HTML
+    function dateHeader(date, count) {
+      const isToday = date === td;
+      const isOverdueGroup = date === '__overdue__';
+      const isNoDue = date === '__nodue__';
+      let label;
+      if (isOverdueGroup) label = 'Overdue';
+      else if (isNoDue) label = 'No due date';
+      else if (isToday) label = 'Today — ' + new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      else label = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' });
+      const cls = isOverdueGroup ? 'overdue-header' : isToday ? 'today-header' : '';
+      return `<div class="date-group-header ${cls}"><span class="date-group-label">${label}</span><span class="date-group-count">${count}</span></div>`;
+    }
+
+    // Build one group block's inner HTML, tasks grouped by date
     function groupBody(overdue, upcoming, noDue, emptyLabel) {
       let h = '';
-      if (overdue.length) h += `<div class="section-label">Overdue</div><div class="task-list">${overdue.map(t => taskHTML(t)).join('')}</div>`;
-      if (upcoming.length) h += `<div class="section-label">${periodLabel}</div><div class="task-list">${upcoming.map(t => taskHTML(t)).join('')}</div>`;
-      else if (!overdue.length) h += `<div class="empty-state">No ${emptyLabel} in this period.</div>`;
-      if (noDue.length) h += `<div class="section-label">No due date</div><div class="task-list">${noDue.map(t => taskHTML(t, false)).join('')}</div>`;
+      if (overdue.length) {
+        h += dateHeader('__overdue__', overdue.length);
+        h += `<div class="task-list date-group-tasks">${overdue.map(t => taskHTML(t, false)).join('')}</div>`;
+      }
+      if (upcoming.length) {
+        const byDate = {};
+        upcoming.forEach(t => { if (!byDate[t.due]) byDate[t.due] = []; byDate[t.due].push(t); });
+        Object.keys(byDate).sort().forEach(date => {
+          h += dateHeader(date, byDate[date].length);
+          h += `<div class="task-list date-group-tasks">${byDate[date].map(t => taskHTML(t, false)).join('')}</div>`;
+        });
+      } else if (!overdue.length) {
+        h += `<div class="empty-state">No ${emptyLabel} in this period.</div>`;
+      }
+      if (noDue.length) {
+        h += dateHeader('__nodue__', noDue.length);
+        h += `<div class="task-list date-group-tasks">${noDue.map(t => taskHTML(t, false)).join('')}</div>`;
+      }
+      return h;
+    }
+
+    function gcalGroupedBody() {
+      if (!gCalEvents.length) return `<div class="empty-state">No events in this period.</div>`;
+      const byDate = {};
+      gCalEvents.forEach(e => {
+        const d = (e.start.date || (e.start.dateTime || '').slice(0, 10));
+        if (!byDate[d]) byDate[d] = [];
+        byDate[d].push(e);
+      });
+      let h = '';
+      Object.keys(byDate).sort().forEach(date => {
+        h += dateHeader(date, byDate[date].length);
+        h += `<div class="task-list date-group-tasks">${byDate[date].map(gcalEventHTML).join('')}</div>`;
+      });
       return h;
     }
 
@@ -1754,9 +1815,7 @@
 
     const gcalCol = gCalToken ? groupCol(
       'gcal', 'onetime', calSvg, 'Google Calendar',
-      gCalEvents.length
-        ? `<div class="task-list">${gCalEvents.map(gcalEventHTML).join('')}</div>`
-        : `<div class="empty-state">No events in this period.</div>`,
+      gcalGroupedBody(),
       gCalEvents.length
     ) : '';
 
