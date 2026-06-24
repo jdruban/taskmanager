@@ -716,16 +716,25 @@
   .ends-row-inner { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .ends-row-inner select { flex: 1; min-width: 140px; }
 
-  .group-block { margin-bottom: 2rem; }
+  .groups-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+    align-items: start;
+  }
+  @media (max-width: 660px) {
+    .groups-columns { grid-template-columns: 1fr; }
+  }
+  .group-col { min-width: 0; }
+  .group-block { margin-bottom: 0; }
   .group-header {
     display: flex; align-items: center; gap: 10px;
-    margin: 1.75rem 0 0.75rem; font-size: 13px; font-weight: 600;
+    margin: 0 0 0.75rem; font-size: 13px; font-weight: 600;
     color: var(--text);
   }
   .group-header::before, .group-header::after {
     content: ''; flex: 1; height: 0.5px; background: var(--border-strong);
   }
-  .group-header:first-child { margin-top: 0; }
   .group-tag {
     display: flex; align-items: center; gap: 5px;
     padding: 3px 10px; border-radius: 100px;
@@ -1721,17 +1730,15 @@
     const recurSvg   = `<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 7a5 5 0 0 1 9-3M12 7a5 5 0 0 1-9 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M10.5 3.5 11 4l1-1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.5 10.5 3 10l-1 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
     document.getElementById('dashboard-groups').innerHTML = `
-      <div class="group-header">
-        <span class="group-tag onetime">${oneTimeSvg} One-time tasks</span>
-      </div>
-      <div class="group-block">
-        ${groupBody(otOverdue, otUpcoming, otNoDue, 'one-time tasks')}
-      </div>
-      <div class="group-header">
-        <span class="group-tag recurring">${recurSvg} Recurring tasks</span>
-      </div>
-      <div class="group-block">
-        ${groupBody(recOverdue, recUpcoming, recNoDue, 'recurring tasks')}
+      <div class="groups-columns">
+        <div class="group-col">
+          <div class="group-header"><span class="group-tag onetime">${oneTimeSvg} One-time tasks</span></div>
+          <div class="group-block">${groupBody(otOverdue, otUpcoming, otNoDue, 'one-time tasks')}</div>
+        </div>
+        <div class="group-col">
+          <div class="group-header"><span class="group-tag recurring">${recurSvg} Recurring tasks</span></div>
+          <div class="group-block">${groupBody(recOverdue, recUpcoming, recNoDue, 'recurring tasks')}</div>
+        </div>
       </div>`;
 
     updateCategoryList();
