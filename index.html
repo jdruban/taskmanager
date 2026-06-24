@@ -716,6 +716,51 @@
   .ends-row-inner { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .ends-row-inner select { flex: 1; min-width: 140px; }
 
+  .group-block { margin-bottom: 2rem; }
+  .group-header {
+    display: flex; align-items: center; gap: 10px;
+    margin: 1.75rem 0 0.75rem; font-size: 13px; font-weight: 600;
+    color: var(--text);
+  }
+  .group-header::before, .group-header::after {
+    content: ''; flex: 1; height: 0.5px; background: var(--border-strong);
+  }
+  .group-header:first-child { margin-top: 0; }
+  .group-tag {
+    display: flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 100px;
+    border: 0.5px solid var(--border-strong);
+    background: var(--surface); white-space: nowrap;
+  }
+  .group-tag.recurring { border-color: var(--accent); background: var(--accent-bg); color: var(--accent-text); }
+  .group-tag.onetime   { border-color: var(--border-strong); background: var(--surface); color: var(--text-muted); }
+
+  .search-bar-wrap {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface); border: 0.5px solid var(--border-strong);
+    border-radius: var(--radius-lg); padding: 10px 14px;
+    margin-bottom: 1.25rem;
+  }
+  .search-bar-wrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(83,74,183,0.15); }
+  .search-icon { color: var(--text-hint); flex-shrink: 0; }
+  .search-input {
+    flex: 1; border: none; background: transparent; color: var(--text);
+    font-size: 15px; font-family: inherit; outline: none;
+  }
+  .search-input::placeholder { color: var(--text-hint); }
+  .search-clear {
+    background: none; border: none; cursor: pointer; color: var(--text-hint);
+    font-size: 14px; padding: 2px 4px; border-radius: var(--radius);
+    display: none; font-family: inherit; transition: color 0.12s;
+  }
+  .search-clear:hover { color: var(--text); }
+  .search-clear.visible { display: block; }
+  .search-results-group { margin-bottom: 0.5rem; }
+  .search-count { font-size: 12px; color: var(--text-hint); margin-bottom: 1rem; }
+  .search-highlight { background: #fff176; border-radius: 2px; padding: 0 1px; color: #1a1a18; }
+  @media (prefers-color-scheme: dark) { .search-highlight { background: #665c00; color: #f1efe8; } }
+  .search-empty { text-align: center; padding: 3rem 1rem; color: var(--text-hint); font-size: 14px; }
+
   .gcal-connect-btn {
     display: flex; align-items: center; gap: 6px;
     padding: 6px 12px; border-radius: var(--radius);
@@ -790,6 +835,9 @@
     <button class="active" onclick="showView('dashboard')">Dashboard</button>
     <button onclick="showView('add')">Add task</button>
     <button onclick="showView('all')">All tasks</button>
+    <button onclick="showView('search')" id="nav-search-btn" title="Search (Ctrl+K)">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" style="display:inline;vertical-align:-2px;margin-right:4px"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.4"/><path d="M10 10l2.5 2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>Search
+    </button>
   </nav>
 </header>
 
@@ -847,9 +895,7 @@
     </div>
 
     <div id="gcal-section"></div>
-    <div id="overdue-section"></div>
-    <div id="upcoming-section"></div>
-    <div id="pending-section"></div>
+    <div id="dashboard-groups"></div>
   </div>
 
   <!-- Add Task -->
@@ -947,6 +993,16 @@
   <div id="view-all" class="view">
     <div class="filter-row" id="filter-row"></div>
     <div class="task-list" id="all-tasks-list"></div>
+  </div>
+
+  <!-- Search -->
+  <div id="view-search" class="view">
+    <div class="search-bar-wrap">
+      <svg width="16" height="16" viewBox="0 0 14 14" fill="none" class="search-icon" aria-hidden="true"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.4"/><path d="M10 10l2.5 2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      <input type="text" id="search-input" class="search-input" placeholder="Search tasks and calendar events…" oninput="performSearch()" autocomplete="off" />
+      <button class="search-clear" id="search-clear" onclick="clearSearch()" title="Clear">✕</button>
+    </div>
+    <div id="search-results"></div>
   </div>
 </main>
 
@@ -1146,10 +1202,16 @@
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
     document.getElementById('view-' + name).classList.add('active');
-    const labels = ['dashboard', 'add', 'all'];
-    document.querySelectorAll('nav button')[labels.indexOf(name)].classList.add('active');
+    const labels = ['dashboard', 'add', 'all', 'search'];
+    const idx = labels.indexOf(name);
+    if (idx >= 0) document.querySelectorAll('nav button')[idx].classList.add('active');
     if (name === 'dashboard') renderDashboard();
     if (name === 'all') renderAll();
+    if (name === 'search') {
+      const inp = document.getElementById('search-input');
+      inp.focus();
+      performSearch();
+    }
   }
 
   // ── Recurrence helpers ────────────────────────────────────────────────────
@@ -1580,41 +1642,62 @@
   }
 
   function renderDashboard() {
-    const periodVal = document.getElementById('period-select').value;
+    const pv = document.getElementById('period-select').value;
     const td = today();
-    const overdue = tasks.filter(t => !t.done && t.due && t.due < td);
-    const noDue = tasks.filter(t => !t.done && !t.due);
-    const doneCount = tasks.reduce((sum, t) =>
-      sum + (t.recur ? (t.completedInstances || []).length : (t.done ? 1 : 0)), 0);
 
-    let upcoming = [], upcomingLabel = '';
-    if (periodVal === 'today') {
-      upcoming = tasks.filter(t => !t.done && t.due === td).sort((a,b) => a.due.localeCompare(b.due));
-      upcomingLabel = 'Due today';
-    } else if (periodVal === 'custom') {
+    // Period label
+    let periodLabel = '';
+    if (pv === 'today') periodLabel = 'Due today';
+    else if (pv === 'custom') {
       const rs = getCalDate('rs'), re = getCalDate('re');
-      upcoming = tasks.filter(t => {
-        if (t.done || !t.due) return false;
-        if (rs && t.due < rs) return false;
-        if (re && t.due > re) return false;
-        return true;
-      }).sort((a,b) => a.due.localeCompare(b.due));
-      upcomingLabel = rs && re ? `${fmt(rs)} – ${fmt(re)}` : rs ? `From ${fmt(rs)}` : re ? `Until ${fmt(re)}` : 'Custom range';
+      periodLabel = rs && re ? `${fmt(rs)} – ${fmt(re)}` : rs ? `From ${fmt(rs)}` : re ? `Until ${fmt(re)}` : 'Custom range';
     } else {
-      const period = parseInt(periodVal);
-      upcoming = tasks.filter(t => {
-        if (t.done || !t.due || t.due < td) return false;
-        return period === 0 || daysUntil(t.due) <= period;
-      }).sort((a,b) => a.due.localeCompare(b.due));
-      upcomingLabel = period === 0 ? 'All upcoming' : `Next ${period} days`;
+      const p = parseInt(pv);
+      periodLabel = p === 0 ? 'All upcoming' : `Next ${p} days`;
     }
 
+    // Filter upcoming for a given task list
+    function getUpcoming(list) {
+      if (pv === 'today') return list.filter(t => !t.done && t.due === td);
+      if (pv === 'custom') {
+        const rs = getCalDate('rs'), re = getCalDate('re');
+        return list.filter(t => {
+          if (t.done || !t.due) return false;
+          if (rs && t.due < rs) return false;
+          if (re && t.due > re) return false;
+          return true;
+        });
+      }
+      const p = parseInt(pv);
+      return list.filter(t => {
+        if (t.done || !t.due || t.due < td) return false;
+        return p === 0 || daysUntil(t.due) <= p;
+      });
+    }
+
+    const oneTime  = tasks.filter(t => !t.recur);
+    const recurring = tasks.filter(t => !!t.recur);
+
+    const otOverdue  = oneTime.filter(t => !t.done && t.due && t.due < td);
+    const recOverdue = recurring.filter(t => !t.done && t.due && t.due < td);
+    const otUpcoming  = getUpcoming(oneTime).sort((a,b) => a.due.localeCompare(b.due));
+    const recUpcoming = getUpcoming(recurring).sort((a,b) => a.due.localeCompare(b.due));
+    const otNoDue  = oneTime.filter(t => !t.done && !t.due);
+    const recNoDue = recurring.filter(t => !t.done && !t.due);
+
+    const totalOverdue  = otOverdue.length + recOverdue.length;
+    const totalUpcoming = otUpcoming.length + recUpcoming.length;
+    const totalNoDue    = otNoDue.length + recNoDue.length;
+    const doneCount = tasks.reduce((s, t) => s + (t.recur ? (t.completedInstances||[]).length : (t.done ? 1 : 0)), 0);
+
+    // Stats
     document.getElementById('stats-row').innerHTML = `
-      <div class="stat-card danger"><div class="label">Overdue</div><div class="value">${overdue.length}</div></div>
-      <div class="stat-card warning"><div class="label">Upcoming</div><div class="value">${upcoming.length}</div></div>
-      <div class="stat-card accent"><div class="label">No due date</div><div class="value">${noDue.length}</div></div>
+      <div class="stat-card danger"><div class="label">Overdue</div><div class="value">${totalOverdue}</div></div>
+      <div class="stat-card warning"><div class="label">${periodLabel}</div><div class="value">${totalUpcoming}</div></div>
+      <div class="stat-card accent"><div class="label">No due date</div><div class="value">${totalNoDue}</div></div>
       <div class="stat-card success"><div class="label">Completed</div><div class="value">${doneCount}</div></div>`;
 
+    // Google Calendar
     const gcalEl = document.getElementById('gcal-section');
     if (gCalToken) {
       gcalEl.innerHTML = gCalEvents.length
@@ -1624,20 +1707,32 @@
       gcalEl.innerHTML = '';
     }
 
-    const overdueEl = document.getElementById('overdue-section');
-    overdueEl.innerHTML = overdue.length
-      ? `<div class="section-label">Overdue</div><div class="task-list">${overdue.map(t => taskHTML(t)).join('')}</div>`
-      : '';
+    // Build one group block's inner HTML
+    function groupBody(overdue, upcoming, noDue, emptyLabel) {
+      let h = '';
+      if (overdue.length) h += `<div class="section-label">Overdue</div><div class="task-list">${overdue.map(t => taskHTML(t)).join('')}</div>`;
+      if (upcoming.length) h += `<div class="section-label">${periodLabel}</div><div class="task-list">${upcoming.map(t => taskHTML(t)).join('')}</div>`;
+      else if (!overdue.length) h += `<div class="empty-state">No ${emptyLabel} in this period.</div>`;
+      if (noDue.length) h += `<div class="section-label">No due date</div><div class="task-list">${noDue.map(t => taskHTML(t, false)).join('')}</div>`;
+      return h;
+    }
 
-    const upcomingEl = document.getElementById('upcoming-section');
-    upcomingEl.innerHTML = upcoming.length
-      ? `<div class="section-label">${upcomingLabel}</div><div class="task-list">${upcoming.map(t => taskHTML(t)).join('')}</div>`
-      : `<div class="section-label">${upcomingLabel || 'Upcoming'}</div><div class="empty-state">No tasks in this period.</div>`;
+    const oneTimeSvg = `<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.3"/><path d="M4 7h6M7 4v6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`;
+    const recurSvg   = `<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 7a5 5 0 0 1 9-3M12 7a5 5 0 0 1-9 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M10.5 3.5 11 4l1-1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.5 10.5 3 10l-1 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
-    const pendingEl = document.getElementById('pending-section');
-    pendingEl.innerHTML = noDue.length
-      ? `<div class="section-label">No due date</div><div class="task-list">${noDue.map(t => taskHTML(t, false)).join('')}</div>`
-      : '';
+    document.getElementById('dashboard-groups').innerHTML = `
+      <div class="group-header">
+        <span class="group-tag onetime">${oneTimeSvg} One-time tasks</span>
+      </div>
+      <div class="group-block">
+        ${groupBody(otOverdue, otUpcoming, otNoDue, 'one-time tasks')}
+      </div>
+      <div class="group-header">
+        <span class="group-tag recurring">${recurSvg} Recurring tasks</span>
+      </div>
+      <div class="group-block">
+        ${groupBody(recOverdue, recUpcoming, recNoDue, 'recurring tasks')}
+      </div>`;
 
     updateCategoryList();
   }
@@ -1682,6 +1777,127 @@
     if (name === 'dashboard') renderDashboard();
     if (name === 'all') renderAll();
   }
+
+  // ── Search ───────────────────────────────────────────────────────────────
+  function highlight(text, q) {
+    if (!q) return esc(text);
+    const idx = text.toLowerCase().indexOf(q.toLowerCase());
+    if (idx === -1) return esc(text);
+    return esc(text.slice(0, idx)) +
+      `<mark class="search-highlight">${esc(text.slice(idx, idx + q.length))}</mark>` +
+      esc(text.slice(idx + q.length));
+  }
+
+  function taskSearchHTML(task, q) {
+    const overdue = isOverdue(task);
+    const days = daysUntil(task.due);
+    let dateBadge = '';
+    if (task.due) {
+      const label = task.done ? fmt(task.due) : overdue ? `Overdue · ${fmt(task.due)}` : days === 0 ? 'Due today' : days === 1 ? 'Tomorrow' : fmt(task.due);
+      dateBadge = `<span class="badge badge-date">${label}</span>`;
+    }
+    const checkIcon = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <path class="icon-empty" d="M2.5 7l3 3 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path class="icon-done" d="M2.5 7l3 3 6-6" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
+    const undoChip = !task.recur && task.done ? `<button class="undo-chip" onclick="toggleDone(${task.id})">↩ Undo</button>` : '';
+    const instances = task.completedInstances || [];
+    const histBtn = task.recur ? `<button class="history-toggle" onclick="toggleHistory(${task.id})">${instances.length ? instances.length + ' completed' : 'Log dates'}</button>` : '';
+    return `<div class="task-item ${task.done ? 'done' : ''} ${overdue && !task.done ? 'overdue' : ''}" data-id="${task.id}">
+      <button class="check-btn" onclick="toggleDone(${task.id})">${checkIcon}</button>
+      <div class="task-body">
+        <div class="task-title">${highlight(task.title, q)}</div>
+        ${task.desc ? `<div class="task-desc">${highlight(task.desc, q)}</div>` : ''}
+        <div class="task-meta">
+          <span class="badge badge-priority-${task.priority}">${task.priority}</span>
+          ${task.category ? `<span class="badge badge-category">${highlight(task.category, q)}</span>` : ''}
+          ${task.recur ? `<span class="badge badge-recur">↻ ${recurLabel(task)}</span>` : ''}
+          ${dateBadge}${histBtn}${undoChip}
+        </div>
+      </div>
+      <div class="task-actions">
+        <button class="icon-btn" onclick="openEdit(${task.id})" title="Edit">✎</button>
+        <button class="icon-btn danger" onclick="deleteTask(${task.id})" title="Delete">✕</button>
+      </div>
+    </div>`;
+  }
+
+  function performSearch() {
+    const q = document.getElementById('search-input').value.trim();
+    const clearBtn = document.getElementById('search-clear');
+    clearBtn.classList.toggle('visible', q.length > 0);
+    const el = document.getElementById('search-results');
+
+    if (!q) {
+      el.innerHTML = `<div class="search-empty">Start typing to search tasks and calendar events.</div>`;
+      return;
+    }
+
+    const ql = q.toLowerCase();
+    const match = str => (str || '').toLowerCase().includes(ql);
+
+    const oneTimeResults  = tasks.filter(t => !t.recur  && (match(t.title) || match(t.desc) || match(t.category)));
+    const recurringResults = tasks.filter(t => !!t.recur && (match(t.title) || match(t.desc) || match(t.category)));
+    const calResults = gCalEvents.filter(e =>
+      match(e.summary) || match((e.description||'').replace(/<[^>]+>/g,'')) || match(e.location));
+
+    const total = oneTimeResults.length + recurringResults.length + calResults.length;
+
+    if (total === 0) {
+      el.innerHTML = `<div class="search-empty">No results for "<strong>${esc(q)}</strong>".</div>`;
+      return;
+    }
+
+    const oneTimeSvg = `<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.3"/><path d="M4 7h6M7 4v6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`;
+    const recurSvg   = `<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 7a5 5 0 0 1 9-3M12 7a5 5 0 0 1-9 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M10.5 3.5 11 4l1-1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.5 10.5 3 10l-1 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+    let html = `<div class="search-count">${total} result${total !== 1 ? 's' : ''} for "<strong>${esc(q)}</strong>"</div>`;
+
+    if (oneTimeResults.length) {
+      html += `<div class="search-results-group">
+        <div class="group-header"><span class="group-tag onetime">${oneTimeSvg} One-time tasks</span></div>
+        <div class="task-list">${oneTimeResults.map(t => taskSearchHTML(t, q)).join('')}</div>
+      </div>`;
+    }
+
+    if (recurringResults.length) {
+      html += `<div class="search-results-group">
+        <div class="group-header"><span class="group-tag recurring">${recurSvg} Recurring tasks</span></div>
+        <div class="task-list">${recurringResults.map(t => taskSearchHTML(t, q)).join('')}</div>
+      </div>`;
+    }
+
+    if (calResults.length) {
+      html += `<div class="search-results-group">
+        <div class="group-header"><span class="group-tag onetime">
+          <svg width="13" height="13" viewBox="0 0 18 18" fill="none"><rect x="1" y="3" width="16" height="14" rx="2" stroke="currentColor" stroke-width="1.4"/><path d="M1 7h16" stroke="currentColor" stroke-width="1.4"/><path d="M5 1v4M13 1v4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          Google Calendar
+        </span></div>
+        <div class="task-list">${calResults.map(e => gcalEventHTML(e)).join('')}</div>
+      </div>`;
+    }
+
+    el.innerHTML = html;
+  }
+
+  function clearSearch() {
+    document.getElementById('search-input').value = '';
+    document.getElementById('search-clear').classList.remove('visible');
+    document.getElementById('search-results').innerHTML =
+      `<div class="search-empty">Start typing to search tasks and calendar events.</div>`;
+    document.getElementById('search-input').focus();
+  }
+
+  // Ctrl+K / Cmd+K to open search
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      e.preventDefault();
+      showView('search');
+    }
+    if (e.key === 'Escape' && document.getElementById('view-search').classList.contains('active')) {
+      showView('dashboard');
+    }
+  });
 
   // ── Google Calendar ───────────────────────────────────────────────────────
   const GCAL_CLIENT_ID = '512282328231-jo41stl60a1ifl7mvnkaaibg8s6ogoov.apps.googleusercontent.com';
